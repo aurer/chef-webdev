@@ -1,0 +1,30 @@
+# -*- mode: ruby -*-
+# vi: set ft=ruby :
+
+Vagrant.configure("2") do |config|
+  config.vm.box = "bento/centos-7.3"
+
+  # Create a private network
+  config.vm.network "private_network", ip: "10.0.0.100"
+  config.vm.hostname = "Chef"
+
+  # Share an folder to the VM
+  config.vm.synced_folder "../data", "/srv/http", nfs: true
+
+  # Configure the VM
+  config.vm.provider "virtualbox" do |vb|
+    vb.name = "Chef"
+    vb.memory = "2048"
+  end
+
+  # Enable provisioning with chef
+  config.vm.provision "chef_solo" do |chef|
+    chef.synced_folder_type = "nfs"
+    chef.add_recipe "system"
+    chef.add_recipe "nginx"
+    chef.add_recipe "php"
+    chef.add_recipe "mariadb"
+    chef.add_recipe "node"
+    chef.add_recipe "ruby"
+  end
+end
