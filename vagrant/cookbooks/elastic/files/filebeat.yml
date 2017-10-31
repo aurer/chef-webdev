@@ -1,18 +1,16 @@
 # Input
 filebeat.prospectors:
-  - input_type: nginx_acess
+  - input_type: log
     paths:
       - /var/log/nginx/access.log
       - /var/log/nginx/*.access.log
-    fields:
-      level: debug
+    tags: ['nginx', 'access']
 
-  - input_type: nginx_error
+  - input_type: log
     paths:
       - /var/log/nginx/error.log
       - /var/log/nginx/*.error.log
-    fields:
-      level: error
+    tags: ['nginx', 'error']
 
 # Output
 output.logstash:
