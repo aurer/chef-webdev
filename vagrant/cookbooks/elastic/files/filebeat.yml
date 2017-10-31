@@ -1,0 +1,19 @@
+# Input
+filebeat.prospectors:
+  - input_type: nginx_acess
+    paths:
+      - /var/log/nginx/access.log
+      - /var/log/nginx/*.access.log
+    fields:
+      level: debug
+
+  - input_type: nginx_error
+    paths:
+      - /var/log/nginx/error.log
+      - /var/log/nginx/*.error.log
+    fields:
+      level: error
+
+# Output
+output.logstash:
+  hosts: ["localhost:5044"]

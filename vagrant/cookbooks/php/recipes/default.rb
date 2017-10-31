@@ -28,6 +28,13 @@ cookbook_file '/etc/php-fpm.d/www.conf' do
   mode 0644
 end
 
+# Ensure the session directory exists
+directory '/var/lib/php/session' do
+  owner 'nginx'
+  group 'nginx'
+  mode 0711
+end
+
 # Start php-fpm service
 service 'php-fpm' do
   action :start

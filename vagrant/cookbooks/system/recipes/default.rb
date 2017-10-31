@@ -10,6 +10,5 @@ package [
 	"wget",
 	"telnet",
 	"tree",
-	"htop",
-	"docker"
+	"htop"
 ]
