@@ -38,116 +38,146 @@ else
     grey="\e[1;33m";
 fi;
 
-function git_status() {
-    local modified=0;
-    local added=0;
-    local deleted=0;
-    local renamed=0;
-    local copied=0;
-    local untracked=0;
-    local ignored=0;
+# Return git status in prompt form
+function _git_status() {
 
-    local output=$(git status -s 2>/dev/null)
+    # Unstaged counts
+    local M2=0;
+  local A2=0;
+  local D2=0;
+  local R2=0;
+  local C2=0;
+  local U2=0;
+    local I2=0;
 
-    OIFS="${IFS}"
-    IFS=$'\n'
-    for line in ${output}; do
-        if   [[ $line == M* ]]; then
-            modified=$((modified+1));
-        elif [[ $line == A* ]]; then
-            added=$((added+1));
-        elif [[ $line == D* ]]; then
-            deleted=$((deleted+1));
-        elif [[ $line == R* ]]; then
-            renamed=$((renamed+1));
-        elif [[ $line == C* ]]; then
-            copied=$((copied+1));
-        elif [[ $line == ?* ]]; then
-            untracked=$((untracked+1))
-        elif [[ $line == !* ]]; then
-            ignored=$((ignored+1));
+    # Staged counts
+    local M1=0;
+  local A1=0;
+  local D1=0;
+  local R1=0;
+  local C1=0;
+  local U1=0;
+
+    # Output
+    local unstaged='';
+  local staged='';
+    local result='';
+
+    # Don't split on whitespace characters
+    ORIGINAL_IFS="${IFS}"; IFS=$'\n';
+
+    # Loop git status
+    for line in $(git status -s --porcelain 2>/dev/null); do
+    # Count staged items
+    case ${line:0:1} in
+      'M') ((M1+=1));;
+      'D') ((D1+=1));;
+      'A') ((A1+=1));;
+      'R') ((R1+=1));;
+      'C') ((C1+=1));;
+      'U') ((U1+=1));;
+    esac;
+
+        # Count unstaged items
+        case ${line:1:1} in
+            'M') ((M2+=1));;
+            'D') ((D2+=1));;
+            'A') ((A2+=1));;
+            'R') ((R2+=1));;
+            'C') ((C2+=1));;
+            '?') ((U2+=1));;
+            '!') ((I2+=1));;
+        esac;
+    done;
+
+    # Reset split on whitespace
+    IFS="${ORIGINAL_IFS}"
+
+    for state in {M2,A2,D2,R2,C2,U2,I2,M1,A1,D1,R1,C1}; do
+        if [ "${!state}" != "0" ]; then
+            case "$state" in
+        # Staged
+        M1) staged+=" ${yellow}*${!state}$reset";;
+        A1) staged+=" ${green}+${!state}$reset";;
+        D1) staged+=" ${red}-${!state}$reset";;
+        R1) staged+=" ${blue}~${!state}$reset";;
+        C1) staged+=" ${blue}C${!state}$reset";;
+        U1) staged+=" ${blue}C${!state}$reset";;
+
+        # Unstaged items
+                M2) unstaged+=" ${yellow}*${!state}$reset";;
+                A2) unstaged+=" ${green}+${!state}$reset";;
+                D2) unstaged+=" ${red}-${!state}$reset";;
+                R2) unstaged+=" ${blue}~${!state}$reset";;
+                C2) unstaged+=" ${blue}C${!state}$reset";;
+                U2) unstaged+=" ${blue}?${!state}$reset";;
+                I2) unstaged+=" ${blue}?${!state}$reset";;
+            esac;
         fi
     done
-    IFS="${OIFS}"
 
-    s=''
-    if [ $modified != "0" ]; then
-        s+="$yellow*${modified} ";
-    fi
-    if [ $added != "0" ]; then
-        s+="$yellow+${added} ";
-    fi
-    if [ $deleted != "0" ]; then
-        s+="$red-${deleted} ";
-    fi
-    if [ $renamed != "0" ]; then
-        s+="$yellow*${renamed} ";
-    fi
-    if [ $copied != "0" ]; then
-        s+="$yellow*${copied} ";
-    fi
-    if [ $untracked != "0" ]; then
-        s+="$green?${untracked} ";
-    fi
-    if [ $ignored != "0" ]; then
-        s+="$white\${ignored} ";
-    fi
+    # Trim whitespace
+    unstaged=$(echo $unstaged | sed -e "s/^ *//");
+    staged=$(echo $staged | sed -e "s/^ *//");
 
-    echo $s
+  # Compile result
+  if [[ $unstaged != "" ]]; then
+    result+=$reset"[$unstaged]";
+  fi
+  if [[ $staged != "" ]]; then
+    result=$green[$staged$green]$result;
+  fi
+
+    # Return output
+    echo $result;
 }
 
-function git_branch_status() {
-     # check if we're in a git repo
-    git rev-parse --is-inside-work-tree &>/dev/null || return
-
-    local branch=$(git symbolic-ref -q HEAD | sed -e 's|^refs/heads/||')
-    local ahead=$(git rev-list --left-right $branch...origin/$branch 2>/dev/null | grep -c '^<' | tr -d ' ')
-    local behind=$(git rev-list --left-right $branch...origin/$branch 2>/dev/null | grep -c '^>' | tr -d ' ')
-    local out=""
-    if [[ "$ahead" -gt 0 ]]; then out+="↑$ahead"; fi
-    if [[ "$behind" -gt 0 ]]; then out+="↓$behind"; fi
-    if [[ "$out" != "" ]]; then echo $blue $out; fi
+# Return branch being ahead or behind the remote
+function _git_position() {
+    local branch=$(git symbolic-ref -q HEAD | sed -e 's|^refs/heads/||');
+    local ahead=$(git rev-list --left-right $branch...origin/$branch 2>/dev/null | grep -c '^<' | tr -d ' ');
+    local behind=$(git rev-list --left-right $branch...origin/$branch 2>/dev/null | grep -c '^>' | tr -d ' ');
+    local pos="";
+    if [[ "$ahead" -gt 0 ]]; then pos+="↑$ahead"; fi
+    if [[ "$behind" -gt 0 ]]; then pos+="↓$behind"; fi
+    if [[ "$pos" != "" ]]; then echo $blue$pos; fi
 }
 
-function git_info() {
+# Compile git prompt using branch, status and position
+function git_prompt() {
     # check if we're in a git repo
     git rev-parse --is-inside-work-tree &>/dev/null || return
 
-    # quickest check for what branch we're on
+    # Add tag info if available
     local branch=$(git symbolic-ref -q HEAD | sed -e 's|^refs/heads/||')
     local tag=$(git describe 2>/dev/null)
-
-    if [ "$branch" = "" ] && [ "$tag" != "" ]; then
-        branch=$branch#$tag
+    if [ "$tag" != "" ]; then
+      branch="$branch$orange#$tag"
     fi
 
-
-    # Count number of changes
-    local s='';
-    local changes="$(git status -s | wc -l | tr -d ' ')"
-    if [ "$changes" == 0 ]; then
-        s=$green$branch
+    # Color based on number of changes
+    local status=$(_git_status);
+    if [ "$status" == "" ]; then
+      result=$green"$branch"
     else
-        s=$orange$branch' '$(git_status)
+      result="$yellow$branch $status";
     fi
 
     # Check for stashes
     local stashes=$(git stash list | wc -l | tr -d ' ')
     if [ $stashes != "0" ]; then
-        s+="$orange ⚑$stashes";
+      result+="$orange ⚑$stashes";
     fi
 
-    # echo $black'['$s$black']';
-    echo $s$(git_branch_status);
+    echo $result $(_git_position)$reset;
 }
-
 
 # Color user details red when user is root
 if [ $EUID == "0" ]; then
     usercolor=$red;
 else
-    usercolor=$green;
+    usercolor=$yellow;
 fi
 
 # Nicely formatted terminal prompt
-export PS1='\n\[$orange\]\h:\[$yellow\]\w  $(git_info) \n\[$usercolor\]\u:\[$reset\] '
+export PS1='\n\e[1m\[$usercolor\]\u\[$white\]@\[$cyan\]\h  \e[21m\[$grey\]$PWD  $(git_prompt) \n\[$usercolor\]> \[$reset\]'
